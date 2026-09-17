@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Http;
 
 const PAGE_URL = 'https://analysis.eduroam.edu.cn/checkc/pkudetection';
 const AUTH_URL = 'https://analysis.eduroam.edu.cn/checkc/peapmschap';
+const BACKUP_AUTH_URL = 'https://eduroam.seesea.site/api/auth/test';
 const SUCCESS_LINE = 'CTRL-EVENT-EAP-SUCCESS EAP authentication completed successfully';
 const TOKEN_PAGE = '<html><head><meta content="csrf+token&amp;value=" name="csrf-token"></head></html>';
 
@@ -29,19 +30,36 @@ function check($condition, string $message): void
     }
 }
 
-function authenticateWithResponse($body, int $status = 200): string
+function backupSuccess(): array
+{
+    return ['results' => [['method' => 'PEAP_MSCHAPV2', 'success' => true, 'output' => SUCCESS_LINE]]];
+}
+
+function authenticateWithResponse($body, int $status, bool $expectBackup): string
 {
     Http::swap(new Factory());
-    Http::fake(function ($request) use ($body, $status) {
+    $urls = [];
+    Http::fake(function ($request) use ($body, $status, &$urls) {
+        $urls[] = $request->url();
         if ($request->url() === PAGE_URL) {
             return Http::response(TOKEN_PAGE);
+        }
+        if ($request->url() === BACKUP_AUTH_URL) {
+            return Http::response(backupSuccess());
         }
         check($request->url() === AUTH_URL, 'Unexpected remote URL.');
 
         return Http::response($body, $status);
     });
 
-    return (new Authenticator())->authenticate('user@example.invalid', 'dummy-password');
+    $result = (new Authenticator())->authenticate('user@example.invalid', 'dummy-password');
+    $expectedUrls = [PAGE_URL, AUTH_URL];
+    if ($expectBackup) {
+        $expectedUrls[] = BACKUP_AUTH_URL;
+    }
+    check($urls === $expectedUrls, 'Incorrect fallback decision, request order, or retry count.');
+
+    return $result;
 }
 
 $cases = [
@@ -72,7 +90,8 @@ $cases = [
 
 $passed = 0;
 foreach ($cases as $name => [$body, $status, $expected]) {
-    check(authenticateWithResponse($body, $status) === $expected, $name.' returned the wrong result.');
+    $expectBackup = !in_array($expected, ['success', 'credential'], true);
+    check(authenticateWithResponse($body, $status, $expectBackup) === ($expectBackup ? 'success' : $expected), $name.' returned the wrong result.');
     $passed++;
 }
 
@@ -122,39 +141,142 @@ $passed++;
 
 foreach (['<html>No token</html>', '<meta name="csrf-token" content="">', ''] as $page) {
     Http::swap(new Factory());
-    $count = 0;
-    Http::fake(function ($request) use ($page, &$count) {
-        $count++;
+    $urls = [];
+    Http::fake(function ($request) use ($page, &$urls) {
+        $urls[] = $request->url();
+        if ($request->url() === BACKUP_AUTH_URL) {
+            return Http::response(backupSuccess());
+        }
         check($request->url() === PAGE_URL, 'Credentials sent without a CSRF token.');
 
         return Http::response($page);
     });
-    check($authenticator->authenticate($username, $password) === 'failure' && $count === 1, 'Missing token must stop the login.');
+    check($authenticator->authenticate($username, $password) === 'success' && $urls === [PAGE_URL, BACKUP_AUTH_URL], 'Missing token must skip the primary POST and try the backup once.');
     $passed++;
 }
 
 foreach ([302, 500] as $status) {
     Http::swap(new Factory());
-    Http::fake(function ($request) use ($status) {
+    $urls = [];
+    Http::fake(function ($request) use ($status, &$urls) {
+        $urls[] = $request->url();
+        if ($request->url() === BACKUP_AUTH_URL) {
+            return Http::response(backupSuccess());
+        }
         check($request->url() === PAGE_URL, 'Credentials sent after an unsuccessful page request.');
 
         return Http::response(TOKEN_PAGE, $status, ['Location' => 'https://example.invalid/']);
     });
-    check($authenticator->authenticate($username, $password) === 'failure', 'Unsuccessful page must stop the login.');
+    check($authenticator->authenticate($username, $password) === 'success' && $urls === [PAGE_URL, BACKUP_AUTH_URL], 'Unsuccessful page must trigger one backup attempt.');
     $passed++;
 }
 
 foreach ([PAGE_URL, AUTH_URL] as $failedUrl) {
     Http::swap(new Factory());
-    Http::fake(function ($request) use ($failedUrl) {
+    $urls = [];
+    Http::fake(function ($request) use ($failedUrl, &$urls) {
+        $urls[] = $request->url();
         if ($request->url() === $failedUrl) {
             throw new ConnectionException('Simulated connection failure');
+        }
+        if ($request->url() === BACKUP_AUTH_URL) {
+            return Http::response(backupSuccess());
         }
 
         return Http::response(TOKEN_PAGE);
     });
-    check($authenticator->authenticate($username, $password) === 'failure', 'Connection errors must reject login without escaping.');
+    $expectedUrls = $failedUrl === PAGE_URL ? [PAGE_URL, BACKUP_AUTH_URL] : [PAGE_URL, AUTH_URL, BACKUP_AUTH_URL];
+    check($authenticator->authenticate($username, $password) === 'success' && $urls === $expectedUrls, 'Connection errors must trigger one backup attempt.');
     $passed++;
 }
+
+$backupCases = [
+    'backup success' => [backupSuccess(), 200, 'success'],
+    'backup credential rejection' => [['results' => [['method' => 'PEAP_MSCHAPV2', 'success' => false, 'output' => 'Access-Reject']]], 200, 'credential'],
+    'backup EAP failure' => [['results' => [['method' => 'PEAP_MSCHAPV2', 'success' => false, 'output' => 'EAP Failure']]], 200, 'credential'],
+    'backup EAP failure event' => [['results' => [['method' => 'PEAP_MSCHAPV2', 'success' => false, 'output' => 'EAP authentication failed']]], 200, 'credential'],
+    'backup timeout' => [['results' => [['method' => 'PEAP_MSCHAPV2', 'success' => false, 'output' => 'EAPOL test timed out']]], 200, 'timeout'],
+    'backup success string' => [['results' => [['method' => 'PEAP_MSCHAPV2', 'success' => 'true']]], 200, 'unknown'],
+    'backup success number' => [['results' => [['method' => 'PEAP_MSCHAPV2', 'success' => 1]]], 200, 'unknown'],
+    'backup missing success' => [['results' => [['method' => 'PEAP_MSCHAPV2', 'output' => SUCCESS_LINE]]], 200, 'unknown'],
+    'backup log alone' => [['results' => [['method' => 'PEAP_MSCHAPV2', 'success' => false, 'output' => SUCCESS_LINE]]], 200, 'unknown'],
+    'unrelated protocol success' => [['results' => [['method' => 'OTHER', 'success' => true]]], 200, 'unknown'],
+    'mixed protocol results' => [['results' => [
+        ['method' => 'OTHER', 'success' => true],
+        ['method' => 'PEAP_MSCHAPV2', 'success' => false, 'output' => 'Access-Reject'],
+    ]], 200, 'credential'],
+    'duplicate protocol results' => [['results' => [
+        ['method' => 'PEAP_MSCHAPV2', 'success' => true],
+        ['method' => 'PEAP_MSCHAPV2', 'success' => false],
+    ]], 200, 'unknown'],
+    'backup malformed log' => [['results' => [['method' => 'PEAP_MSCHAPV2', 'success' => false, 'output' => []]]], 200, 'unknown'],
+    'backup empty results' => [['results' => []], 200, 'unknown'],
+    'backup malformed results' => [['results' => 'SUCCESS'], 200, 'unknown'],
+    'backup non-object result' => [['results' => ['SUCCESS']], 200, 'unknown'],
+    'backup error payload' => [['error' => 'Service unavailable'], 200, 'unknown'],
+    'backup invalid JSON' => ['<html>Service Unavailable</html>', 200, 'unknown'],
+    'backup null JSON' => ['null', 200, 'unknown'],
+    'both routes down' => ['', 503, 'failure'],
+    'backup HTTP error with success body' => [backupSuccess(), 500, 'failure'],
+    'backup HTTP timeout' => ['', 504, 'timeout'],
+    'backup rate limit' => ['', 429, 'failure'],
+    'backup redirect' => ['', 302, 'failure'],
+];
+foreach ($backupCases as $name => [$body, $status, $expected]) {
+    Http::swap(new Factory());
+    $urls = [];
+    Http::fake(function ($request) use ($body, $status, &$urls) {
+        $urls[] = $request->url();
+        if ($request->url() === PAGE_URL) {
+            return Http::response('', 503);
+        }
+        check($request->url() === BACKUP_AUTH_URL, 'Unexpected URL after primary failure.');
+
+        return Http::response($body, $status);
+    });
+    check($authenticator->authenticate($username, $password) === $expected, $name.' returned the wrong result.');
+    check($urls === [PAGE_URL, BACKUP_AUTH_URL], 'The backup must be attempted exactly once.');
+    $passed++;
+}
+
+// Use the same Authenticator twice: each attempt starts at PKU, with no cookies
+// or CSRF data copied to the independent backup JSON request.
+Http::swap(new Factory());
+$urls = [];
+Http::fake(function ($request, $options) use ($username, $password, &$urls) {
+    $urls[] = $request->url();
+    if ($request->url() === PAGE_URL) {
+        return Http::response(TOKEN_PAGE, 200, ['Set-Cookie' => 'advanced-frontend=primary-session; Path=/; Secure']);
+    }
+    if ($request->url() === AUTH_URL) {
+        return Http::response('', 503);
+    }
+    check($request->url() === BACKUP_AUTH_URL && $request->method() === 'POST', 'Incorrect backup endpoint or method.');
+    check($request->header('Cookie') === [], 'Primary cookies leaked to the backup.');
+    check($options['allow_redirects'] === false, 'Backup must not redirect credentials.');
+    check($options['connect_timeout'] === 10 && $options['timeout'] === 30, 'Backup timeouts are missing.');
+    check(strpos(implode('; ', $request->header('Content-Type')), 'application/json') === 0, 'Backup requires JSON.');
+    check($request->data() === ['login' => $username, 'password' => $password], 'Backup credentials were corrupted or CSRF data leaked.');
+
+    return Http::response(backupSuccess());
+});
+check($authenticator->authenticate($username, $password) === 'success', 'Backup JSON request failed.');
+check($authenticator->authenticate($username, $password) === 'success', 'Second failover attempt failed.');
+check($urls === [PAGE_URL, AUTH_URL, BACKUP_AUTH_URL, PAGE_URL, AUTH_URL, BACKUP_AUTH_URL], 'Every login must start at PKU.');
+$passed++;
+
+Http::swap(new Factory());
+$urls = [];
+Http::fake(function ($request) use (&$urls) {
+    $urls[] = $request->url();
+    if ($request->url() === PAGE_URL) {
+        return Http::response('', 503);
+    }
+    check($request->url() === BACKUP_AUTH_URL, 'Unexpected URL when both routes fail.');
+    throw new ConnectionException('Simulated backup connection failure');
+});
+check($authenticator->authenticate($username, $password) === 'failure', 'Backup connection errors must reject login without escaping.');
+check($urls === [PAGE_URL, BACKUP_AUTH_URL], 'Do not retry after both routes fail.');
+$passed++;
 
 echo "Passed {$passed} authentication checks.\n";

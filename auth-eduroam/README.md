@@ -2,9 +2,11 @@
 
 通过 Eduroam 来登录皮肤站。
 
-认证服务使用 [北京大学 eduroam 探测点](https://analysis.eduroam.edu.cn/checkc/pkudetection)，协议为 PEAPv0/EAP-MSCHAPv2。插件先获取会话 Cookie 和 CSRF 令牌，再向该站点的 `/checkc/peapmschap` 接口提交凭据。仅在接口明确返回成功且 EAP 日志确认认证完成时允许登录。
+主认证线路使用 [北京大学 eduroam 探测点](https://analysis.eduroam.edu.cn/checkc/pkudetection)，协议为 PEAPv0/EAP-MSCHAPv2。插件先获取会话 Cookie 和 CSRF 令牌，再向该站点的 `/checkc/peapmschap` 接口提交凭据。主线路仅在接口明确返回成功且 EAP 日志确认认证完成时允许登录。
 
-部署时替换整个 `auth-eduroam` 目录（包括新增的 `src/Authenticator.php`）。服务器需要能通过 HTTPS 访问 `analysis.eduroam.edu.cn`；连接超时为 10 秒，单次请求超时为 30 秒。无法连接或响应异常时会返回认证失败。上游诊断日志可能包含密码，插件不会将其记录或返回前端。
+当主线路连接失败、超时、返回 HTTP 错误、缺少 CSRF 令牌或响应异常时，自动向 [Seesea 备用线路](https://eduroam.seesea.site/) 的 `/api/auth/test` 接口提交 JSON 格式凭据。备用线路必须明确返回 `PEAP_MSCHAPV2` 的布尔值 `success: true` 才允许登录。主线路明确返回凭据错误时直接拒绝，不切换线路。每次登录优先使用主线路，备用线路最多尝试一次；两条线路均不可用时返回失败。
+
+部署时替换整个 `auth-eduroam` 目录（包括 `src/Authenticator.php`）。服务器需要能通过 HTTPS 访问 `analysis.eduroam.edu.cn` 和 `eduroam.seesea.site`；每次请求连接超时为 10 秒、总超时为 30 秒。发生切换时会顺序执行请求，请为 PHP 和反向代理预留足够的请求时间（最坏约 90 秒）。两站之间不共享 Cookie 或 CSRF 令牌。上游诊断日志可能包含密码，插件不会将其记录或返回前端。
 
 ## 功能
 
@@ -46,7 +48,7 @@ EDUROAM_STORE_HOST=mail.example.com
 
 ## 开发验证
 
-在具有 Laravel 8 HTTP Client 和 Guzzle 7 的环境中，运行 `php auth-eduroam/tests/authenticator.php /path/to/vendor/autoload.php`（可使用 Blessing Skin 的 Composer 自动加载文件）。测试使用模拟响应，不会向认证站点发送凭据，覆盖会话/CSRF、特殊字符编码、成功与失败结果、超时及异常响应。
+在具有 Laravel 8 HTTP Client 和 Guzzle 7 的环境中，运行 `php auth-eduroam/tests/authenticator.php /path/to/vendor/autoload.php`（可使用 Blessing Skin 的 Composer 自动加载文件）。测试使用模拟响应，不会向认证站点发送凭据，覆盖会话/CSRF、特殊字符编码、成功与失败结果、超时、异常响应及主备切换。
 
 ## 声明
 
@@ -64,9 +66,11 @@ https://github.com/bs-community/blessing-skin-plugins
 
 Log in skin server with Eduroam.
 
-Authentication uses the [Peking University eduroam detection site](https://analysis.eduroam.edu.cn/checkc/pkudetection) with PEAPv0/EAP-MSCHAPv2. The plugin obtains session cookies and a CSRF token before posting credentials to `/checkc/peapmschap`. Login requires both an explicit success result and an EAP authentication success log entry.
+The primary route uses the [Peking University eduroam detection site](https://analysis.eduroam.edu.cn/checkc/pkudetection) with PEAPv0/EAP-MSCHAPv2. The plugin obtains session cookies and a CSRF token before posting credentials to `/checkc/peapmschap`. Login through the primary requires both an explicit success result and an EAP authentication success log entry.
 
-Deploy the entire `auth-eduroam` directory, including the new `src/Authenticator.php`. The server must reach `analysis.eduroam.edu.cn` over HTTPS. Connection and per-request timeouts are 10 and 30 seconds respectively; connection errors and invalid responses reject authentication. Upstream diagnostics may contain passwords and are never logged or returned to the browser by the plugin.
+Connection failures, timeouts, HTTP errors, missing CSRF tokens, and invalid primary responses trigger one fallback attempt using JSON credentials at the [Seesea backup](https://eduroam.seesea.site/)'s `/api/auth/test` endpoint. The backup must explicitly return boolean `success: true` for `PEAP_MSCHAPV2`. An explicit credential rejection from PKU stops immediately. Each login starts with PKU, tries the backup at most once, and fails if neither route is available.
+
+Deploy the entire `auth-eduroam` directory, including `src/Authenticator.php`. The server must reach both `analysis.eduroam.edu.cn` and `eduroam.seesea.site` over HTTPS. Each request has a 10-second connection timeout and a 30-second total timeout; allow sufficient PHP and reverse proxy request time for sequential fallback (up to approximately 90 seconds). Cookies and CSRF tokens are not shared across sites. Upstream diagnostics may contain passwords and are never logged or returned to the browser by the plugin.
 
 ## Features
 
@@ -108,7 +112,7 @@ EDUROAM_STORE_HOST=mail.example.com
 
 ## Development checks
 
-With Laravel 8's HTTP Client and Guzzle 7 available, run `php auth-eduroam/tests/authenticator.php /path/to/vendor/autoload.php`, using Blessing Skin's Composer autoloader if available. Tests use simulated responses without sending credentials to the remote site, covering sessions/CSRF, form encoding, success/failure handling, timeouts, and malformed responses.
+With Laravel 8's HTTP Client and Guzzle 7 available, run `php auth-eduroam/tests/authenticator.php /path/to/vendor/autoload.php`, using Blessing Skin's Composer autoloader if available. Tests use simulated responses without sending credentials to the remote sites, covering sessions/CSRF, form encoding, success/failure handling, timeouts, malformed responses, and failover.
 
 ## Statement
 
