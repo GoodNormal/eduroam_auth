@@ -1,0 +1,7 @@
+unset: 未配置
+host:
+  set: 配置了 EDUROAM_HOST ，将使用 :username@:host 进行验证并存入数据库。 
+  set_with_store_host: 同时配置了 EDUROAM_HOST 和 EDUROAM_STORE_HOST ，将使用 :username@:host 进行验证，而将 :username@:store_host 存入数据库。 
+  unset: 未配置 EDUROAM_HOST 环境变量，目前用户可以使用任意成员的完整 Eduroam 用户名进行验证。
+only_store_host: EDUROAM_STORE_HOST 环境变量将被忽略。
+guide: 可以在站点根目录 .env 文件处配置环境变量。

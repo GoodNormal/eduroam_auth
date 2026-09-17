@@ -1,0 +1,14 @@
+<div class="my-3 text-center">
+    <div class="mb-1">{{ trans('AuthEduroam::auth.title') }}</div>
+    <a href="/auth/login" class="btn btn-block bg-light border-secondary">
+        <i class="fas fa-sign-in-alt"></i>&nbsp;
+        {{ trans('AuthEduroam::auth.eduroam.back', { 'identification': trans('front-end.auth.identification')}) }}
+    </a>
+</div>
+{#
+<br>
+<div class="callout callout-info">
+    如果您尚未注册，我们将会自动帮您注册，注册账户即表明你同意<a href='https://www.sitmc.club/privacy/' target='_blank'>《SIT-Minecraft 隐私政策》</a>
+</div>
+#}
+

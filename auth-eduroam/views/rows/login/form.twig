@@ -1,0 +1,142 @@
+<form action="/auth/eduroam/login" method="post">
+    <input type="hidden" name="_token" value="{{ csrf_token() }}">
+    <div class="input-group mb-3">
+        <input type="text" class="form-control" placeholder="{{ trans('AuthEduroam::auth.eduroam.username') }}" name="identification" required>
+        <div class="input-group-append">
+            <div class="input-group-text">
+                <span class="fas fa-user-graduate"></span>
+            </div>
+        </div>
+    </div>
+    <div class="input-group mb-3">
+        <input type="password" class="form-control" placeholder="{{ trans('AuthEduroam::auth.eduroam.password') }}" name="password" required>
+        <div class="input-group-append">
+            <div class="input-group-text">
+                <span class="fas fa-lock"></span>
+            </div>
+        </div>
+    </div>
+    <div class="d-flex" style="display:none;" id="captcha"></div>
+    <div class="alert alert-warning" style="display:none;" id="warning">
+        <i class="icon fas fa-exclamation-triangle"></i>
+        <span id="warning-text"></span>
+    </div>
+    <div class="d-flex justify-content-between mb-3">
+        <label>
+          <input type="checkbox" class="mr-1" name="remember" />
+          {{ trans('front-end.auth.keep') }}
+        </label>
+    </div>
+    <div class="row">
+        <div class="col-12">
+            <button type="submit" id="loginButton" class="btn btn-primary btn-block">{{ trans('front-end.auth.login') }}</button>
+        </div>
+    </div>
+</form>
+<script>
+    var loginForm = document.querySelector('form'); 
+    var captchaDiv = document.getElementById('captcha')
+    async function submit(formData, captcha){
+        const response = await blessing.fetch.post('/auth/eduroam/login', {
+            identification: formData.get('identification'),
+            password: formData.get('password'),
+            keep: formData.get('remember'),
+            captcha: captcha || (blessing.extra.tooManyFails ? (blessing.extra.recaptcha ? grecaptcha.getResponse() : formData.get('captcha')) : undefined),
+        })
+        if(response.code === 0){
+            window.location.href = response.data.redirectTo;
+        } else {
+            var warningDiv = document.getElementById('warning');
+            var warningText = document.getElementById('warning-text')
+            warningText.innerText = response.message;
+            warningDiv.style.display = null;
+            loginButton.disabled = false;
+            loginButton.innerHTML = blessing.t('auth.login');
+            if(blessing.extra.tooManyFails){
+                if(blessing.extra.recaptcha){
+                    grecaptcha.reset()
+                }else{
+                    document.getElementById('captcha-img').src=blessing.base_url+'/auth/captcha?v='+new Date().getTime()
+                }
+            }
+            if (response.data.login_fails > 3 && !blessing.extra.tooManyFails) {
+                blessing.extra.tooManyFails = true
+                if (blessing.extra.recaptcha) {
+                    if (!blessing.extra.invisible) {
+                        blessing.notify.showModal({
+                            mode: 'alert',
+                            text: blessing.t('auth.tooManyFails.recaptcha'),
+                        })
+                    }
+                    loadRecaptcha();
+                } else {
+                    blessing.notify.showModal({
+                        mode: 'alert',
+                        text: blessing.t('auth.tooManyFails.captcha'),
+                    })
+                    loadCaptcha();
+                }
+            }
+        }
+    }
+    var recaptchaCallback = function(token){
+        submit(new FormData(loginForm), token)
+    }
+    var onloadCallback = function() {
+        grecaptcha.render('recaptcha', {
+            sitekey: blessing.extra.recaptcha,
+            size:blessing.extra.invisible ? 'invisible' : '',
+            callback:blessing.extra.invisible ? 'recaptchaCallback' : undefined
+        });
+    };
+    function loadCaptcha(){
+        captcha.innerHTML = `
+        <div class="form-group mb-3 mr-2">
+            <input type="text" class="form-control" placeholder="${blessing.t('auth.captcha')}" name="captcha" required value="" />
+        </div>
+        <img src="${blessing.base_url+'/auth/captcha?v='+new Date().getTime()}"
+        alt="${blessing.t('auth.captcha')}"
+        style="cursor: pointer;"
+        height="34"
+        title="${blessing.t('auth.change-captcha')}"
+        onClick="this.src=blessing.base_url+'/auth/captcha?v='+new Date().getTime()"
+        id="captcha-img"
+        />`;
+        captchaDiv.style.display = null;
+    }
+    function loadRecaptcha(){
+        const outerDiv = document.createElement('div');
+        outerDiv.className = 'mb-2';
+        const recaptchaDiv = document.createElement('div');
+        recaptchaDiv.id = 'recaptcha'
+        const apiScript = document.createElement('script');
+        apiScript.src = 'https://recaptcha.net/recaptcha/api.js?onload=onloadCallback&render=explicit';
+        apiScript.async = true;
+        apiScript.defer = true;
+        outerDiv.appendChild(recaptchaDiv);
+        captchaDiv.appendChild(outerDiv);
+        captchaDiv.appendChild(apiScript);
+    }
+    document.addEventListener("DOMContentLoaded", function() {
+        if(blessing.extra.tooManyFails){
+            if(blessing.extra.recaptcha){
+                loadRecaptcha();
+            }else{
+                loadCaptcha();
+            }
+        }
+        loginForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            var warningDiv = document.getElementById('warning');
+            warningDiv.style.display = 'none';
+            var loginButton = document.getElementById('loginButton');
+            loginButton.disabled = true;
+            loginButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>' + blessing.t('auth.loggingIn');
+            if(blessing.extra.recaptcha && blessing.extra.invisible){
+                grecaptcha.execute()
+            }else{
+                submit(new FormData(loginForm))
+            }
+        });
+    });
+</script>

@@ -1,0 +1,20 @@
+{
+    "name": "require-password",
+    "title": "RequirePassword::general.title",
+    "version": "0.1.0",
+    "description": "RequirePassword::general.description",
+    "author": "a1375625918",
+    "url": "",
+    "namespace": "RequirePassword",
+    "require": {
+      "blessing-skin-server": "^6"
+    },
+    "enchants": {
+      "icon": {
+        "fa": "key",
+        "faType": "fas",
+        "bg": "yellow"
+      }
+    }
+  }
+  

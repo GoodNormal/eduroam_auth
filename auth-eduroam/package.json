@@ -1,0 +1,20 @@
+{
+  "name": "auth-eduroam",
+  "title": "AuthEduroam::general.title",
+  "version": "0.1.2",
+  "description": "AuthEduroam::general.description",
+  "author": "a1375625918",
+  "url": "",
+  "namespace": "AuthEduroam",
+  "require": {
+    "blessing-skin-server": "^6"
+  },
+  "enchants": {
+    "config": "Configuration",
+    "icon": {
+      "fa": "wifi",
+      "faType": "fas",
+      "bg": "primary"
+    }
+  }
+}

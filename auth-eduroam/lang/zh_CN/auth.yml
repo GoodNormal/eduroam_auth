@@ -1,0 +1,15 @@
+title: 其它登录方式
+
+eduroam:
+  name: Eduroam 账号
+  login: 通过 :eduroam_name 登录
+  back: 通过 :identification 登录
+  message: 请使用您的 :eduroam_name 登录
+  username: 用户名
+  password: 密码
+  error:
+    credential: 用户名或密码错误，请重新输入。
+    failure: 认证失败，请稍后重试或联系管理员。
+    illegal: 非法操作，请稍后重试或联系管理员。
+    timeout: 认证超时，请稍后重试或联系管理员。
+    unknown: 未知错误，请稍后重试或联系管理员。

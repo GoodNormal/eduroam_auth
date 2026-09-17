@@ -1,0 +1,8 @@
+{% if errors is not empty %}
+    {% for error in errors.all() %}
+        <div class="alert alert-warning">
+            <i class="icon fas fa-exclamation-triangle"></i> {{ error }}
+        </div>
+    {% endfor %}
+{% endif %}
+

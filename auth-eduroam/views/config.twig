@@ -1,0 +1,23 @@
+{% extends 'admin.base' %}
+
+{% block title %}{{ trans('AuthEduroam::general.title') }}{% endblock %}
+
+{% block content %}
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card card-info">
+        <div class="card-header">
+          <h3 class="card-title">{{ trans('AuthEduroam::general.title') }}</h3>
+        </div>
+        <div class="card-body">
+          {% if info is not null %}
+            <div class="callout">{{ info }}</div>
+          {% endif %}
+          <p>EDUROAM_HOST={{ host }}</p>
+          <p>EDUROAM_STORE_HOST={{ store_host }}</p>
+          <div class="callout callout-info">{{ trans('AuthEduroam::config.guide') }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

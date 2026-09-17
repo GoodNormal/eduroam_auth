@@ -1,0 +1,17 @@
+
+
+title: Log In With
+
+eduroam:
+  name: Eduroam account
+  login: Login with :eduroam_name
+  back: Login with :identification
+  message: Please log in with :eduroam_name
+  username: Username
+  password: Password
+  error:
+    credential: Username or password is wrong. Please enter again.
+    failure: Authentication failure. Retry later or contact admins.
+    illegal: Illigal action. Retry later or contact admins.
+    timeout: Authentication timeout. Retry later or contact admins.
+    unknown: Unknown error. Retry later or contact admins.

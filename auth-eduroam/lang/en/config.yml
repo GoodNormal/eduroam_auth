@@ -1,0 +1,7 @@
+unset: Unset
+host:
+  set: EDUROAM_HOST is set, will use :username@:host to verify and store in database.
+  set_with_store_host: EDUROAM_HOST and EDUROAM_STORE_HOST are set together, will use :username@:host to verify but store :username@:store_host in database.
+  unset: EDUROAM_HOST is unset. All members are allowed with full Eduroam username.
+only_store_host: ' EDUROAM_STORE_HOST will be ignored.'
+guide: You can set environment variables in .env file at root of the site.
