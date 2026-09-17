@@ -2,6 +2,8 @@
 
 通过 Eduroam 来登录皮肤站。
 
+安装步骤、配置示例和用户操作见 [项目使用说明](../README.md)。
+
 主认证线路使用 [北京大学 eduroam 探测点](https://analysis.eduroam.edu.cn/checkc/pkudetection)，协议为 PEAPv0/EAP-MSCHAPv2。插件先获取会话 Cookie 和 CSRF 令牌，再向该站点的 `/checkc/peapmschap` 接口提交凭据。主线路仅在接口明确返回成功且 EAP 日志确认认证完成时允许登录。
 
 当主线路连接失败、超时、返回 HTTP 错误、缺少 CSRF 令牌或响应异常时，自动向 [Seesea 备用线路](https://eduroam.seesea.site/) 的 `/api/auth/test` 接口提交 JSON 格式凭据。备用线路必须明确返回 `PEAP_MSCHAPV2` 的布尔值 `success: true` 才允许登录。主线路明确返回凭据错误时直接拒绝，不切换线路。每次登录优先使用主线路，备用线路最多尝试一次；两条线路均不可用时返回失败。
@@ -12,10 +14,10 @@
 
 - [x] 验证 Eduroam 登录凭据
 - [x] 使用 Blessing Skin 验证码或 reCAPTCHA
-- [x] 替换邮箱域名
+- [ ] 替换入库邮箱域名（当前 `EDUROAM_STORE_HOST` 尚未生效）
 - [ ] 设置密码
 
-> 使用 require-passsword 插件来让用户重置密码，以用于外置登录等。
+> 使用 require-password 插件来让用户设置皮肤站本地密码，以用于外置登录等。
 
 ## 配置
 
@@ -23,7 +25,7 @@
 
 `EDUROAM_HOST` : 添加在用户名后的 Eduroam 域名。
 
-`EDUROAM_STORE_HOST` : 替换 `EDUROAM_HOST` 并存储在数据库中的电子邮箱域名。
+`EDUROAM_STORE_HOST` : 原计划用于替换入库邮箱域名；当前登录代码未使用它的值，配置后不会改变用户邮箱。
 
 ## 示例
 
@@ -39,12 +41,7 @@
 EDUROAM_HOST=example.com
 ```
 
-同时设置 `EDUROAM_HOST=example.com` 和 `EDUROAM_STORE_HOST=mail.example.com` (均不加 `@`) 可在 Eduroam 用户名后自动添加 `@example.com` ，但使用 `username@mail.example.com` 在数据库中查找或注册用户。在学校 Eduroam 域名与电子邮件不一样时尤为有用。
-
-```
-EDUROAM_HOST=example.com
-EDUROAM_STORE_HOST=mail.example.com
-```
+当前版本始终按认证使用的完整账号查找或创建用户。例如设置 `EDUROAM_HOST=example.com` 时，入库邮箱仍为 `username@example.com`，不受 `EDUROAM_STORE_HOST` 影响。
 
 ## 开发验证
 
@@ -66,6 +63,8 @@ https://github.com/bs-community/blessing-skin-plugins
 
 Log in skin server with Eduroam.
 
+See the [project usage guide](../README.md) for installation, configuration, and login instructions in Chinese.
+
 The primary route uses the [Peking University eduroam detection site](https://analysis.eduroam.edu.cn/checkc/pkudetection) with PEAPv0/EAP-MSCHAPv2. The plugin obtains session cookies and a CSRF token before posting credentials to `/checkc/peapmschap`. Login through the primary requires both an explicit success result and an EAP authentication success log entry.
 
 Connection failures, timeouts, HTTP errors, missing CSRF tokens, and invalid primary responses trigger one fallback attempt using JSON credentials at the [Seesea backup](https://eduroam.seesea.site/)'s `/api/auth/test` endpoint. The backup must explicitly return boolean `success: true` for `PEAP_MSCHAPV2`. An explicit credential rejection from PKU stops immediately. Each login starts with PKU, tries the backup at most once, and fails if neither route is available.
@@ -76,10 +75,10 @@ Deploy the entire `auth-eduroam` directory, including `src/Authenticator.php`. T
 
 - [x] Verify Eduroam credentials
 - [x] Use Blessing Skin (re)CAPTCHAs
-- [x] Replace Email hosts
+- [ ] Replace stored email hosts (`EDUROAM_STORE_HOST` is not yet effective)
 - [ ] Set Passwords
 
-> Use require-passsword plugin to let users reset passwords for external authentication, etc.
+> Use the require-password plugin to let users set local skin server passwords for external authentication, etc.
 
 ## Configuration
 
@@ -87,7 +86,7 @@ Set environment variables in .env file.
 
 `EDUROAM_HOST` : Eduroam hostname that will append to username.
 
-`EDUROAM_STORE_HOST` : Email hostname that will store in database in replace of `EDUROAM_HOST` .
+`EDUROAM_STORE_HOST` : Intended to replace the stored email hostname. The current login code does not use its value, so setting it does not change the user's email.
 
 ## Examples
 
@@ -103,12 +102,7 @@ Set `EDUROAM_HOST=example.com` (without `@`) to automatically append `@example.c
 EDUROAM_HOST=example.com
 ```
 
-Set `EDUROAM_HOST=example.com` and `EDUROAM_STORE_HOST=mail.example.com` (without `@`) together to append `@example.com` to Eduroam username, but use `username@mail.example.com` to lookup or register users in database. Useful if your school has different hostname for Eduroam and student email.
-
-```
-EDUROAM_HOST=example.com
-EDUROAM_STORE_HOST=mail.example.com
-```
+The current version looks up or creates users using the full authentication identity. With `EDUROAM_HOST=example.com`, the stored email remains `username@example.com`, regardless of `EDUROAM_STORE_HOST`.
 
 ## Development checks
 
