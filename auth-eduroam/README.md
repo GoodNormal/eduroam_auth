@@ -44,6 +44,10 @@ EDUROAM_HOST=example.com
 EDUROAM_STORE_HOST=mail.example.com
 ```
 
+## 开发验证
+
+在具有 Laravel 8 HTTP Client 和 Guzzle 7 的环境中，运行 `php auth-eduroam/tests/authenticator.php /path/to/vendor/autoload.php`（可使用 Blessing Skin 的 Composer 自动加载文件）。测试使用模拟响应，不会向认证站点发送凭据，覆盖会话/CSRF、特殊字符编码、成功与失败结果、超时及异常响应。
+
 ## 声明
 
 本项目仅用于学习相关验证过程。使用请自担风险。作者不承担使用此插件带来的任何损失或引发的责任。
@@ -101,6 +105,10 @@ Set `EDUROAM_HOST=example.com` and `EDUROAM_STORE_HOST=mail.example.com` (withou
 EDUROAM_HOST=example.com
 EDUROAM_STORE_HOST=mail.example.com
 ```
+
+## Development checks
+
+With Laravel 8's HTTP Client and Guzzle 7 available, run `php auth-eduroam/tests/authenticator.php /path/to/vendor/autoload.php`, using Blessing Skin's Composer autoloader if available. Tests use simulated responses without sending credentials to the remote site, covering sessions/CSRF, form encoding, success/failure handling, timeouts, and malformed responses.
 
 ## Statement
 
